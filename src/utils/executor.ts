@@ -1,6 +1,7 @@
 import { execa, ExecaReturnValue } from 'execa';
 import path from 'path';
 import chalk from 'chalk';
+import { sanitizeLaneName, validateProjectPath } from './sanitize.js';
 
 export interface ExecutionOptions {
   cwd?: string;
@@ -83,11 +84,15 @@ export async function executeFastlane(
   projectPath: string,
   envVars: Record<string, string> = {}
 ): Promise<ExecutionResult> {
-  const platformDir = path.join(projectPath, platform);
-  
-  process.stderr.write(chalk.blue(`Executing fastlane ${lane} for ${platform}...\n`));
-  
-  return executeCommand('fastlane', [lane], {
+  // Validate inputs
+  const safeLane = sanitizeLaneName(lane);
+  const safeProjectPath = await validateProjectPath(projectPath);
+
+  const platformDir = path.join(safeProjectPath, platform);
+
+  process.stderr.write(chalk.blue(`Executing fastlane ${safeLane} for ${platform}...\n`));
+
+  return executeCommand('fastlane', [safeLane], {
     cwd: platformDir,
     env: envVars,  // executeCommand handles merging with process.env
   });
