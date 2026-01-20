@@ -1,4 +1,5 @@
 import { runPreflight, PreflightContext, formatValidationResult } from '../validators/index.js';
+import { logger } from '../utils/logger.js';
 
 type HandlerResult = { content: Array<{ type: string; text: string }> };
 type Handler<T> = (args: T) => Promise<HandlerResult>;
@@ -17,14 +18,14 @@ export function withPreflight<T>(
           type: 'text',
           text: `Pre-flight checks failed:\n\n${formatValidationResult(preflight)}`,
         }],
+        isError: true,
       };
     }
 
     // Log warnings if any
     if (preflight.issues.length > 0) {
       const warnings = formatValidationResult(preflight);
-      // Will be logged to stderr
-      process.stderr.write(`Pre-flight warnings:\n${warnings}\n`);
+      logger.warning(`Pre-flight warnings:\n${warnings}`);
     }
 
     return handler(args);
