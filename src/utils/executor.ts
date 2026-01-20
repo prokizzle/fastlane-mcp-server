@@ -2,6 +2,7 @@ import { execa, ExecaReturnValue } from 'execa';
 import path from 'path';
 import chalk from 'chalk';
 import { sanitizeLaneName, validateProjectPath } from './sanitize.js';
+import { diagnoseError, formatDiagnosedError } from '../errors/diagnosis.js';
 
 export interface ExecutionOptions {
   cwd?: string;
@@ -134,23 +135,29 @@ export async function cleanBuildDirectories(
 
 /**
  * Format execution result for MCP response
+ * Uses error intelligence for failed commands to provide helpful diagnostics
  */
 export function formatResult(
   message: string,
   result: ExecutionResult
 ): { content: Array<{ type: string; text: string }> } {
   let text = message;
-  
-  if (result.stdout) {
-    text += `\n\nOutput:\n${result.stdout}`;
+
+  if (result.exitCode === 0) {
+    // Success case
+    if (result.stdout) {
+      text += `\n\nOutput:\n${result.stdout}`;
+    }
+    if (result.stderr) {
+      text += `\n\nWarnings:\n${result.stderr}`;
+    }
+  } else {
+    // Error case - use error intelligence
+    const errorOutput = result.stderr || result.stdout || 'Unknown error';
+    const diagnosed = diagnoseError(errorOutput);
+    text += `\n\n${formatDiagnosedError(diagnosed)}`;
   }
-  
-  if (result.stderr && result.exitCode === 0) {
-    text += `\n\nWarnings:\n${result.stderr}`;
-  } else if (result.stderr) {
-    text += `\n\nErrors:\n${result.stderr}`;
-  }
-  
+
   return {
     content: [
       {
@@ -166,7 +173,7 @@ export function formatResult(
  */
 export function formatError(error: unknown): { content: Array<{ type: string; text: string }> } {
   const message = error instanceof Error ? error.message : 'Unknown error occurred';
-  
+
   return {
     content: [
       {
