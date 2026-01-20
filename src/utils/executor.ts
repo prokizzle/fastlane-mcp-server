@@ -5,6 +5,7 @@ import chalk from 'chalk';
 export interface ExecutionOptions {
   cwd?: string;
   env?: Record<string, string>;
+  timeout?: number;  // Timeout in milliseconds
 }
 
 export interface ExecutionResult {
@@ -12,6 +13,9 @@ export interface ExecutionResult {
   stderr: string;
   exitCode: number;
 }
+
+// Default timeout from config (10 minutes)
+const DEFAULT_TIMEOUT = 600000;
 
 /**
  * Execute a command with proper error handling
@@ -21,6 +25,8 @@ export async function executeCommand(
   args: string[],
   options: ExecutionOptions = {}
 ): Promise<ExecutionResult> {
+  const timeout = options.timeout ?? DEFAULT_TIMEOUT;
+
   try {
     const result = await execa(command, args, {
       cwd: options.cwd,
@@ -28,6 +34,7 @@ export async function executeCommand(
         ...process.env,  // Preserve existing environment
         ...options.env,  // Override with custom vars
       },
+      timeout,
     });
 
     return {
@@ -36,14 +43,32 @@ export async function executeCommand(
       exitCode: result.exitCode,
     };
   } catch (error: unknown) {
-    // Even if command fails, return the output
-    if (error && typeof error === 'object' && ('stdout' in error || 'stderr' in error)) {
-      const execError = error as { stdout?: string; stderr?: string; message?: string; exitCode?: number };
-      return {
-        stdout: execError.stdout || '',
-        stderr: execError.stderr || execError.message || '',
-        exitCode: execError.exitCode || 1,
+    if (error && typeof error === 'object') {
+      const execError = error as {
+        stdout?: string;
+        stderr?: string;
+        message?: string;
+        exitCode?: number;
+        timedOut?: boolean;
       };
+
+      // Handle timeout specifically
+      if (execError.timedOut) {
+        return {
+          stdout: execError.stdout || '',
+          stderr: `Command timed out after ${timeout}ms`,
+          exitCode: 124,  // Standard timeout exit code
+        };
+      }
+
+      // Even if command fails, return the output
+      if (execError.stdout !== undefined || execError.stderr !== undefined) {
+        return {
+          stdout: execError.stdout || '',
+          stderr: execError.stderr || execError.message || '',
+          exitCode: execError.exitCode || 1,
+        };
+      }
     }
     throw error;
   }

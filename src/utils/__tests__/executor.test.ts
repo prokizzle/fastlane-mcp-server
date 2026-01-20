@@ -21,3 +21,14 @@ describe('executeCommand', () => {
     expect(result.stdout.trim()).toBe('test_value');
   });
 });
+
+describe('executeCommand timeout', () => {
+  it('should timeout if command takes too long', async () => {
+    const result = await executeCommand('sleep', ['10'], {
+      timeout: 100  // 100ms timeout
+    });
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain('timed out');
+  });
+});
