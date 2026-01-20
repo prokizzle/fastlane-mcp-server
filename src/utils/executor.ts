@@ -56,7 +56,7 @@ export async function executeFastlane(
 ): Promise<ExecutionResult> {
   const platformDir = path.join(projectPath, platform);
   
-  console.log(chalk.blue(`Executing fastlane ${lane} for ${platform}...`));
+  process.stderr.write(chalk.blue(`Executing fastlane ${lane} for ${platform}...\n`));
   
   return executeCommand('fastlane', [lane], {
     cwd: platformDir,
@@ -73,7 +73,7 @@ export async function cleanBuildDirectories(
 ): Promise<void> {
   const platformDir = path.join(projectPath, platform);
   
-  console.log(chalk.yellow(`Cleaning ${platform} build directories...`));
+  process.stderr.write(chalk.yellow(`Cleaning ${platform} build directories...\n`));
   
   if (platform === 'ios') {
     await executeCommand('xcodebuild', ['clean'], { cwd: platformDir });
