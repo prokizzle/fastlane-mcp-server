@@ -24,7 +24,10 @@ export async function executeCommand(
   try {
     const result = await execa(command, args, {
       cwd: options.cwd,
-      env: options.env,
+      env: {
+        ...process.env,  // Preserve existing environment
+        ...options.env,  // Override with custom vars
+      },
     });
 
     return {
@@ -32,13 +35,14 @@ export async function executeCommand(
       stderr: result.stderr,
       exitCode: result.exitCode,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Even if command fails, return the output
-    if (error.stdout || error.stderr) {
+    if (error && typeof error === 'object' && ('stdout' in error || 'stderr' in error)) {
+      const execError = error as { stdout?: string; stderr?: string; message?: string; exitCode?: number };
       return {
-        stdout: error.stdout || '',
-        stderr: error.stderr || error.message,
-        exitCode: error.exitCode || 1,
+        stdout: execError.stdout || '',
+        stderr: execError.stderr || execError.message || '',
+        exitCode: execError.exitCode || 1,
       };
     }
     throw error;
@@ -60,7 +64,7 @@ export async function executeFastlane(
   
   return executeCommand('fastlane', [lane], {
     cwd: platformDir,
-    env: envVars,
+    env: envVars,  // executeCommand handles merging with process.env
   });
 }
 
