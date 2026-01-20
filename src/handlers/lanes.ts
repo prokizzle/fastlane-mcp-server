@@ -2,22 +2,43 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { LaneArgs } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import { validateProjectPath, ValidationError } from '../utils/sanitize.js';
 
 export async function handleListLanes(args: LaneArgs) {
   const { projectPath, platform } = args;
-  
+
+  // Validate projectPath before using it
+  let validatedPath: string;
+  try {
+    validatedPath = await validateProjectPath(projectPath);
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      logger.error(`Invalid project path: ${error.message}`);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error: ${error.message}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+    throw error;
+  }
+
   logger.info('Listing available Fastlane lanes...');
-  
+
   const lanes: string[] = [];
-  
+
   try {
     if (platform) {
       // List lanes for specific platform
-      await extractLanesFromPlatform(projectPath, platform, lanes);
+      await extractLanesFromPlatform(validatedPath, platform, lanes);
     } else {
       // List lanes for both platforms
       for (const plat of ['ios', 'android']) {
-        await extractLanesFromPlatform(projectPath, plat, lanes, true);
+        await extractLanesFromPlatform(validatedPath, plat, lanes, true);
       }
     }
     
