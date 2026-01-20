@@ -12,3 +12,12 @@ export {
 } from './lanes.js';
 
 export type { LaneInfo } from './lanes.js';
+
+export {
+  detectCapabilitiesFromFiles,
+  detectCapabilitiesFromFastfile,
+  mergeCapabilities,
+  createEmptyCapabilities,
+} from './capabilities.js';
+
+export type { ProjectCapabilities } from './capabilities.js';
