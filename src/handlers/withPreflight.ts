@@ -1,7 +1,7 @@
 import { runPreflight, PreflightContext, formatValidationResult } from '../validators/index.js';
 import { logger } from '../utils/logger.js';
 
-type HandlerResult = { content: Array<{ type: string; text: string }> };
+type HandlerResult = { content: Array<{ type: string; text: string }>; isError?: boolean };
 type Handler<T> = (args: T) => Promise<HandlerResult>;
 
 export function withPreflight<T>(
