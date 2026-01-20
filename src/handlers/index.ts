@@ -6,3 +6,4 @@ export { handleCertificates } from './certificates.js';
 export { handleListLanes } from './lanes.js';
 export { handleVersion } from './version.js';
 export { handleMetadata } from './metadata.js';
+export { handleAnalyzeProject, handleAnalyzeProjectJson } from './analyze.js';

@@ -21,3 +21,17 @@ export {
 } from './capabilities.js';
 
 export type { ProjectCapabilities } from './capabilities.js';
+
+export {
+  analyzeProject,
+  detectSigningMethod,
+  detectDestinations,
+  generateSuggestedActions,
+  listProjectFiles,
+} from './analyze.js';
+
+export type {
+  ProjectAnalysis,
+  PlatformAnalysis,
+  EnvironmentStatus,
+} from './analyze.js';
