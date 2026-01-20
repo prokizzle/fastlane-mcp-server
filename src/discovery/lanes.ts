@@ -25,10 +25,9 @@ export interface LaneInfo {
 export function parseLanesFromFastfile(content: string): LaneInfo[] {
   const lanes: LaneInfo[] = [];
 
-  // Track current platform context using a stack to handle nesting
+  // Track current platform context
   let currentPlatform: 'ios' | 'android' | null = null;
   let lastDescription: string | null = null;
-  let platformBlockDepth = 0;
 
   const lines = content.split('\n');
 
@@ -47,15 +46,15 @@ export function parseLanesFromFastfile(content: string): LaneInfo[] {
       const platform = platformMatch[1];
       if (platform === 'ios' || platform === 'android') {
         currentPlatform = platform;
-        platformBlockDepth = 1;
       }
       continue;
     }
 
-    // Track description blocks - supports both single and double quotes
-    const descMatch = trimmed.match(/^desc\s+["'](.+)["']\s*$/);
+    // Track description blocks - supports both single and double quotes (must match)
+    const descMatch = trimmed.match(/^desc\s+(?:"([^"]+)"|'([^']+)')\s*$/);
     if (descMatch) {
-      lastDescription = descMatch[1];
+      // Either group 1 (double quotes) or group 2 (single quotes) will have the value
+      lastDescription = descMatch[1] || descMatch[2];
       continue;
     }
 
