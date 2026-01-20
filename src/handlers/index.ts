@@ -7,3 +7,5 @@ export { handleListLanes } from './lanes.js';
 export { handleVersion } from './version.js';
 export { handleMetadata } from './metadata.js';
 export { handleAnalyzeProject, handleAnalyzeProjectJson } from './analyze.js';
+export { handleResearchPlugins, handleResearchPluginsJson } from './plugins.js';
+export type { ResearchPluginsArgs } from './plugins.js';
