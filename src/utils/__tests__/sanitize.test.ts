@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { sanitizeLaneName, validatePath, ValidationError } from '../sanitize.js';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { mkdtemp, rm, writeFile, mkdir } from 'fs/promises';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { sanitizeLaneName, validatePath, validateProjectPath, ValidationError } from '../sanitize.js';
 
 describe('sanitizeLaneName', () => {
   it('should allow valid lane names', () => {
@@ -17,9 +20,19 @@ describe('sanitizeLaneName', () => {
 });
 
 describe('validatePath', () => {
+  let tempDir: string;
+
+  beforeAll(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'sanitize-test-'));
+  });
+
+  afterAll(async () => {
+    await rm(tempDir, { recursive: true });
+  });
+
   it('should allow valid paths', async () => {
-    // Use a path that exists
-    await expect(validatePath('/tmp')).resolves.toBe('/tmp');
+    // Use the temp directory that exists
+    await expect(validatePath(tempDir)).resolves.toBe(tempDir);
   });
 
   it('should reject paths that do not exist', async () => {
@@ -27,6 +40,46 @@ describe('validatePath', () => {
   });
 
   it('should reject paths with traversal attempts', async () => {
+    // Test various traversal patterns - no dependency on specific system files
+    await expect(validatePath('../../../etc/passwd')).rejects.toThrow(ValidationError);
     await expect(validatePath('/tmp/../../../etc/passwd')).rejects.toThrow(ValidationError);
+    await expect(validatePath('./foo/../../../bar')).rejects.toThrow(ValidationError);
+    await expect(validatePath('some/path/../../../other')).rejects.toThrow(ValidationError);
+  });
+
+  it('should reject relative path traversal that would escape directory', async () => {
+    // This is the key test: relative paths with .. should be rejected
+    await expect(validatePath('../../../etc/passwd')).rejects.toThrow("Path contains path traversal sequence '..'");
+  });
+});
+
+describe('validateProjectPath', () => {
+  let tempDir: string;
+  let tempFile: string;
+
+  beforeAll(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'project-test-'));
+    tempFile = join(tempDir, 'test-file.txt');
+    await writeFile(tempFile, 'test content');
+  });
+
+  afterAll(async () => {
+    await rm(tempDir, { recursive: true });
+  });
+
+  it('should allow valid directory paths', async () => {
+    await expect(validateProjectPath(tempDir)).resolves.toBe(tempDir);
+  });
+
+  it('should reject file paths (requires directory)', async () => {
+    await expect(validateProjectPath(tempFile)).rejects.toThrow('Project path must be a directory');
+  });
+
+  it('should reject paths that do not exist', async () => {
+    await expect(validateProjectPath('/nonexistent/project/path')).rejects.toThrow(ValidationError);
+  });
+
+  it('should reject paths with traversal sequences', async () => {
+    await expect(validateProjectPath('../../../etc')).rejects.toThrow("Path contains path traversal sequence '..'");
   });
 });

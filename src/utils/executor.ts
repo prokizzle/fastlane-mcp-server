@@ -75,6 +75,17 @@ export async function executeCommand(
   }
 }
 
+// Valid platforms for Fastlane operations
+const VALID_PLATFORMS = ['ios', 'android'] as const;
+type ValidPlatform = typeof VALID_PLATFORMS[number];
+
+function validatePlatform(platform: string): ValidPlatform {
+  if (!VALID_PLATFORMS.includes(platform as ValidPlatform)) {
+    throw new Error(`Invalid platform: ${platform}. Must be one of: ${VALID_PLATFORMS.join(', ')}`);
+  }
+  return platform as ValidPlatform;
+}
+
 /**
  * Execute a Fastlane command
  */
@@ -86,9 +97,10 @@ export async function executeFastlane(
 ): Promise<ExecutionResult> {
   // Validate inputs
   const safeLane = sanitizeLaneName(lane);
+  const safePlatform = validatePlatform(platform);
   const safeProjectPath = await validateProjectPath(projectPath);
 
-  const platformDir = path.join(safeProjectPath, platform);
+  const platformDir = path.join(safeProjectPath, safePlatform);
 
   process.stderr.write(chalk.blue(`Executing fastlane ${safeLane} for ${platform}...\n`));
 
@@ -105,11 +117,15 @@ export async function cleanBuildDirectories(
   platform: string,
   projectPath: string
 ): Promise<void> {
-  const platformDir = path.join(projectPath, platform);
-  
-  process.stderr.write(chalk.yellow(`Cleaning ${platform} build directories...\n`));
-  
-  if (platform === 'ios') {
+  // Validate inputs
+  const safePlatform = validatePlatform(platform);
+  const safeProjectPath = await validateProjectPath(projectPath);
+
+  const platformDir = path.join(safeProjectPath, safePlatform);
+
+  process.stderr.write(chalk.yellow(`Cleaning ${safePlatform} build directories...\n`));
+
+  if (safePlatform === 'ios') {
     await executeCommand('xcodebuild', ['clean'], { cwd: platformDir });
   } else {
     await executeCommand('./gradlew', ['clean'], { cwd: platformDir });

@@ -41,21 +41,14 @@ export async function validatePath(inputPath: string): Promise<string> {
 
   const trimmed = inputPath.trim();
 
+  // Reject any path containing '..' to prevent path traversal attacks
+  if (trimmed.includes('..')) {
+    throw new ValidationError(`Path contains path traversal sequence '..': ${trimmed}`);
+  }
+
   // Resolve to absolute path and normalize
   const resolved = path.resolve(trimmed);
   const normalized = path.normalize(resolved);
-
-  // Check for path traversal (.. that escapes the intended directory)
-  // Allow .. only if it stays within a reasonable path structure
-  if (trimmed.includes('..')) {
-    const originalParts = trimmed.split(path.sep).filter(p => p !== '');
-    const normalizedParts = normalized.split(path.sep).filter(p => p !== '');
-
-    // If normalized has fewer parts and original had .., potential traversal
-    if (originalParts.includes('..') && normalizedParts.length < originalParts.filter(p => p !== '..').length) {
-      throw new ValidationError(`Path contains suspicious traversal: ${trimmed}`);
-    }
-  }
 
   // Verify the path exists
   try {
