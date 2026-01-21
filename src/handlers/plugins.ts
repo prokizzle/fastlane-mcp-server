@@ -15,6 +15,9 @@ import {
   parsePluginfile,
   filterInstalledPlugins,
   PluginRecommendation,
+  searchPlugins,
+  getPluginInfo,
+  PluginInfo,
 } from '../plugins/registry.js';
 import {
   detectCapabilitiesFromFiles,
@@ -431,4 +434,319 @@ export async function handleResearchPluginsJson(args: ResearchPluginsArgs): Prom
       isError: true,
     };
   }
+}
+
+// =============================================================================
+// Search Plugins Handler
+// =============================================================================
+
+/**
+ * Arguments for the search_plugins tool
+ */
+export interface SearchPluginsArgs {
+  query: string;
+}
+
+/**
+ * Handle search_plugins MCP tool call
+ *
+ * Searches for fastlane plugins by keyword in name or description.
+ */
+export async function handleSearchPlugins(args: SearchPluginsArgs): Promise<{
+  content: Array<{ type: string; text: string }>;
+  isError?: boolean;
+}> {
+  const { query } = args;
+
+  // Validate query
+  if (!query || typeof query !== 'string' || query.trim().length === 0) {
+    logger.error('Search query is required');
+    return {
+      content: [
+        {
+          type: 'text',
+          text: 'Error: Search query is required and must be a non-empty string.',
+        },
+      ],
+      isError: true,
+    };
+  }
+
+  const trimmedQuery = query.trim();
+  logger.info(`Searching for plugins matching: ${trimmedQuery}`);
+
+  try {
+    const results = searchPlugins(trimmedQuery);
+
+    if (results.length === 0) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `## Plugin Search Results for "${trimmedQuery}"\n\nNo plugins found matching your search query.\n\nTry:\n- Using different keywords\n- Searching for plugin functionality (e.g., "firebase", "versioning", "badge")\n- Running \`fastlane search_plugins\` for more options from RubyGems`,
+          },
+        ],
+      };
+    }
+
+    const lines: string[] = [];
+    lines.push(`## Plugin Search Results for "${trimmedQuery}"\n`);
+    lines.push(`Found ${results.length} matching plugin${results.length === 1 ? '' : 's'}:\n`);
+
+    for (const plugin of results) {
+      lines.push(`**${plugin.name}**`);
+      lines.push(`- ${plugin.description}`);
+      if (plugin.homepage) {
+        lines.push(`- Homepage: ${plugin.homepage}`);
+      }
+      lines.push('');
+    }
+
+    logger.success(`Found ${results.length} plugin(s) matching "${trimmedQuery}"`);
+
+    return {
+      content: [{ type: 'text', text: lines.join('\n') }],
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error(`Plugin search failed: ${message}`);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Error searching plugins: ${message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+// =============================================================================
+// Get Plugin Info Handler
+// =============================================================================
+
+/**
+ * Arguments for the get_plugin_info tool
+ */
+export interface GetPluginInfoArgs {
+  pluginName: string;
+}
+
+/**
+ * Handle get_plugin_info MCP tool call
+ *
+ * Returns detailed information about a specific fastlane plugin.
+ */
+export async function handleGetPluginInfo(args: GetPluginInfoArgs): Promise<{
+  content: Array<{ type: string; text: string }>;
+  isError?: boolean;
+}> {
+  const { pluginName } = args;
+
+  // Validate plugin name
+  if (!pluginName || typeof pluginName !== 'string' || pluginName.trim().length === 0) {
+    logger.error('Plugin name is required');
+    return {
+      content: [
+        {
+          type: 'text',
+          text: 'Error: Plugin name is required and must be a non-empty string.',
+        },
+      ],
+      isError: true,
+    };
+  }
+
+  const trimmedName = pluginName.trim();
+  logger.info(`Getting info for plugin: ${trimmedName}`);
+
+  try {
+    // Try with the exact name first
+    let plugin = getPluginInfo(trimmedName);
+
+    // If not found, try with 'fastlane-plugin-' prefix
+    if (!plugin && !trimmedName.startsWith('fastlane-plugin-')) {
+      plugin = getPluginInfo(`fastlane-plugin-${trimmedName}`);
+    }
+
+    if (!plugin) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error: Plugin "${trimmedName}" not found in the catalog.\n\nTry:\n- Using the full plugin name (e.g., "fastlane-plugin-firebase_app_distribution")\n- Searching for plugins with \`search_plugins\` tool\n- The plugin may exist on RubyGems but is not in our curated catalog`,
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    const lines: string[] = [];
+    lines.push(`## ${plugin.name}\n`);
+    lines.push(`- **Description:** ${plugin.description}`);
+    lines.push(`- **Source:** ${plugin.source}`);
+    if (plugin.homepage) {
+      lines.push(`- **Homepage:** ${plugin.homepage}`);
+    }
+    lines.push(`- **Install:** \`gem '${plugin.name}'\``);
+
+    logger.success(`Retrieved info for plugin: ${plugin.name}`);
+
+    return {
+      content: [{ type: 'text', text: lines.join('\n') }],
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error(`Get plugin info failed: ${message}`);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Error getting plugin info: ${message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+// =============================================================================
+// Install Plugins Handler (Command Generator)
+// =============================================================================
+
+/**
+ * Arguments for the install_plugins tool
+ */
+export interface InstallPluginsArgs {
+  plugins: string[];
+  projectPath: string;
+}
+
+/**
+ * Handle install_plugins MCP tool call
+ *
+ * Generates installation commands for fastlane plugins.
+ * Does NOT actually execute the installation - returns instructions only.
+ */
+export async function handleInstallPlugins(args: InstallPluginsArgs): Promise<{
+  content: Array<{ type: string; text: string }>;
+  isError?: boolean;
+}> {
+  const { plugins, projectPath } = args;
+
+  // Validate project path
+  let validatedPath: string;
+  try {
+    validatedPath = await validateProjectPath(projectPath);
+  } catch (error) {
+    if (isValidationError(error)) {
+      logger.error(`Invalid project path: ${error.message}`);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error: ${error.message}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+    throw error;
+  }
+
+  // Validate plugins array
+  if (!plugins || !Array.isArray(plugins) || plugins.length === 0) {
+    logger.error('Plugins array is required');
+    return {
+      content: [
+        {
+          type: 'text',
+          text: 'Error: plugins must be a non-empty array of plugin names.',
+        },
+      ],
+      isError: true,
+    };
+  }
+
+  // Validate and normalize plugin names
+  const validPlugins: PluginInfo[] = [];
+  const invalidPlugins: string[] = [];
+
+  for (const pluginName of plugins) {
+    if (typeof pluginName !== 'string' || pluginName.trim().length === 0) {
+      invalidPlugins.push(String(pluginName));
+      continue;
+    }
+
+    const trimmedName = pluginName.trim();
+
+    // Try to find the plugin in catalog
+    let plugin = getPluginInfo(trimmedName);
+
+    // If not found, try with 'fastlane-plugin-' prefix
+    if (!plugin && !trimmedName.startsWith('fastlane-plugin-')) {
+      plugin = getPluginInfo(`fastlane-plugin-${trimmedName}`);
+    }
+
+    if (plugin) {
+      validPlugins.push(plugin);
+    } else {
+      invalidPlugins.push(trimmedName);
+    }
+  }
+
+  // Report invalid plugins if any
+  if (invalidPlugins.length > 0 && validPlugins.length === 0) {
+    logger.error(`No valid plugins found: ${invalidPlugins.join(', ')}`);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Error: None of the specified plugins were found in the catalog.\n\nInvalid plugins:\n${invalidPlugins.map(p => `- ${p}`).join('\n')}\n\nTry:\n- Using the full plugin name (e.g., "fastlane-plugin-firebase_app_distribution")\n- Searching for plugins with \`search_plugins\` tool`,
+        },
+      ],
+      isError: true,
+    };
+  }
+
+  logger.info(`Generating install commands for ${validPlugins.length} plugin(s)`);
+
+  // Generate installation instructions
+  const lines: string[] = [];
+  lines.push('## Install Plugins\n');
+
+  if (invalidPlugins.length > 0) {
+    lines.push(`**Warning:** The following plugins were not found in the catalog and will be skipped:`);
+    for (const p of invalidPlugins) {
+      lines.push(`- ${p}`);
+    }
+    lines.push('');
+  }
+
+  lines.push('To install the requested plugins, run the following commands in your project directory:\n');
+  lines.push('```bash');
+  lines.push(`cd ${validatedPath}`);
+
+  // Extract short plugin name from full name for add_plugin command
+  for (const plugin of validPlugins) {
+    const shortName = plugin.name.replace(/^fastlane-plugin-/, '');
+    lines.push(`fastlane add_plugin ${shortName}`);
+  }
+  lines.push('```\n');
+
+  lines.push('Or add these lines to your Pluginfile:\n');
+  lines.push('```ruby');
+  for (const plugin of validPlugins) {
+    lines.push(`gem '${plugin.name}'`);
+  }
+  lines.push('```\n');
+
+  lines.push('Then run: `fastlane install_plugins`');
+
+  logger.success(`Generated install commands for ${validPlugins.length} plugin(s)`);
+
+  return {
+    content: [{ type: 'text', text: lines.join('\n') }],
+  };
 }

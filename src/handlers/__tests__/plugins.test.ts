@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { PluginInfo } from '../../plugins/registry.js';
 
 // Mock fs module at the top level
 vi.mock('fs', async () => {
@@ -588,5 +589,493 @@ describe('handleResearchPluginsJson', () => {
     expect(parsed.installedPlugins).toHaveLength(2);
     expect(parsed.installedPlugins).toContain('fastlane-plugin-versioning');
     expect(parsed.installedPlugins).toContain('fastlane-plugin-badge');
+  });
+});
+
+// =============================================================================
+// handleSearchPlugins Tests
+// =============================================================================
+
+describe('handleSearchPlugins', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should return error for empty query', async () => {
+    const { handleSearchPlugins } = await import('../plugins.js');
+    const result = await handleSearchPlugins({ query: '' });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Error');
+    expect(result.content[0].text).toContain('Search query is required');
+  });
+
+  it('should return error for whitespace-only query', async () => {
+    const { handleSearchPlugins } = await import('../plugins.js');
+    const result = await handleSearchPlugins({ query: '   ' });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Error');
+    expect(result.content[0].text).toContain('Search query is required');
+  });
+
+  it('should return matching plugins for valid query', async () => {
+    const mockPlugins: PluginInfo[] = [
+      {
+        name: 'fastlane-plugin-firebase_app_distribution',
+        description: 'Distribute builds via Firebase App Distribution',
+        source: 'rubygems',
+        homepage: 'https://github.com/fastlane/fastlane-plugin-firebase_app_distribution',
+      },
+    ];
+
+    vi.doMock('../../plugins/registry.js', () => ({
+      searchPlugins: vi.fn().mockReturnValue(mockPlugins),
+      getPluginInfo: vi.fn(),
+      getPluginRecommendations: vi.fn().mockReturnValue([]),
+      parsePluginfile: vi.fn().mockReturnValue([]),
+      filterInstalledPlugins: vi.fn().mockImplementation((recs) => recs),
+    }));
+
+    const { handleSearchPlugins } = await import('../plugins.js');
+    const result = await handleSearchPlugins({ query: 'firebase' });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('## Plugin Search Results for "firebase"');
+    expect(result.content[0].text).toContain('fastlane-plugin-firebase_app_distribution');
+    expect(result.content[0].text).toContain('Distribute builds via Firebase');
+    expect(result.content[0].text).toContain('Found 1 matching plugin');
+  });
+
+  it('should return multiple results when multiple plugins match', async () => {
+    const mockPlugins: PluginInfo[] = [
+      {
+        name: 'fastlane-plugin-versioning',
+        description: 'Manage version numbers',
+        source: 'rubygems',
+        homepage: 'https://github.com/example/versioning',
+      },
+      {
+        name: 'fastlane-plugin-semantic_release',
+        description: 'Automated versioning based on semantic commits',
+        source: 'rubygems',
+        homepage: 'https://github.com/example/semantic',
+      },
+    ];
+
+    vi.doMock('../../plugins/registry.js', () => ({
+      searchPlugins: vi.fn().mockReturnValue(mockPlugins),
+      getPluginInfo: vi.fn(),
+      getPluginRecommendations: vi.fn().mockReturnValue([]),
+      parsePluginfile: vi.fn().mockReturnValue([]),
+      filterInstalledPlugins: vi.fn().mockImplementation((recs) => recs),
+    }));
+
+    const { handleSearchPlugins } = await import('../plugins.js');
+    const result = await handleSearchPlugins({ query: 'version' });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('Found 2 matching plugins');
+    expect(result.content[0].text).toContain('fastlane-plugin-versioning');
+    expect(result.content[0].text).toContain('fastlane-plugin-semantic_release');
+  });
+
+  it('should handle no results gracefully', async () => {
+    vi.doMock('../../plugins/registry.js', () => ({
+      searchPlugins: vi.fn().mockReturnValue([]),
+      getPluginInfo: vi.fn(),
+      getPluginRecommendations: vi.fn().mockReturnValue([]),
+      parsePluginfile: vi.fn().mockReturnValue([]),
+      filterInstalledPlugins: vi.fn().mockImplementation((recs) => recs),
+    }));
+
+    const { handleSearchPlugins } = await import('../plugins.js');
+    const result = await handleSearchPlugins({ query: 'nonexistent' });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('## Plugin Search Results for "nonexistent"');
+    expect(result.content[0].text).toContain('No plugins found matching your search query');
+    expect(result.content[0].text).toContain('Try:');
+  });
+
+  it('should trim whitespace from query', async () => {
+    const mockPlugins: PluginInfo[] = [
+      {
+        name: 'fastlane-plugin-badge',
+        description: 'Add badges to app icons',
+        source: 'rubygems',
+      },
+    ];
+
+    vi.doMock('../../plugins/registry.js', () => ({
+      searchPlugins: vi.fn().mockReturnValue(mockPlugins),
+      getPluginInfo: vi.fn(),
+      getPluginRecommendations: vi.fn().mockReturnValue([]),
+      parsePluginfile: vi.fn().mockReturnValue([]),
+      filterInstalledPlugins: vi.fn().mockImplementation((recs) => recs),
+    }));
+
+    const { handleSearchPlugins } = await import('../plugins.js');
+    const result = await handleSearchPlugins({ query: '  badge  ' });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('## Plugin Search Results for "badge"');
+  });
+});
+
+// =============================================================================
+// handleGetPluginInfo Tests
+// =============================================================================
+
+describe('handleGetPluginInfo', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should return error for empty plugin name', async () => {
+    const { handleGetPluginInfo } = await import('../plugins.js');
+    const result = await handleGetPluginInfo({ pluginName: '' });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Error');
+    expect(result.content[0].text).toContain('Plugin name is required');
+  });
+
+  it('should return error for whitespace-only plugin name', async () => {
+    const { handleGetPluginInfo } = await import('../plugins.js');
+    const result = await handleGetPluginInfo({ pluginName: '   ' });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Plugin name is required');
+  });
+
+  it('should return plugin info for valid full plugin name', async () => {
+    const mockPlugin: PluginInfo = {
+      name: 'fastlane-plugin-firebase_app_distribution',
+      description: 'Distribute builds via Firebase App Distribution',
+      source: 'rubygems',
+      homepage: 'https://github.com/fastlane/fastlane-plugin-firebase_app_distribution',
+    };
+
+    vi.doMock('../../plugins/registry.js', () => ({
+      getPluginInfo: vi.fn().mockReturnValue(mockPlugin),
+      searchPlugins: vi.fn().mockReturnValue([]),
+      getPluginRecommendations: vi.fn().mockReturnValue([]),
+      parsePluginfile: vi.fn().mockReturnValue([]),
+      filterInstalledPlugins: vi.fn().mockImplementation((recs) => recs),
+    }));
+
+    const { handleGetPluginInfo } = await import('../plugins.js');
+    const result = await handleGetPluginInfo({
+      pluginName: 'fastlane-plugin-firebase_app_distribution',
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('## fastlane-plugin-firebase_app_distribution');
+    expect(result.content[0].text).toContain('**Description:** Distribute builds via Firebase');
+    expect(result.content[0].text).toContain('**Source:** rubygems');
+    expect(result.content[0].text).toContain('**Homepage:** https://github.com');
+    expect(result.content[0].text).toContain("**Install:** `gem 'fastlane-plugin-firebase_app_distribution'`");
+  });
+
+  it('should return plugin info for short plugin name (without prefix)', async () => {
+    const mockPlugin: PluginInfo = {
+      name: 'fastlane-plugin-versioning',
+      description: 'Manage version numbers',
+      source: 'rubygems',
+      homepage: 'https://github.com/example/versioning',
+    };
+
+    vi.doMock('../../plugins/registry.js', () => ({
+      getPluginInfo: vi.fn().mockImplementation((name: string) => {
+        if (name === 'fastlane-plugin-versioning') {
+          return mockPlugin;
+        }
+        return null;
+      }),
+      searchPlugins: vi.fn().mockReturnValue([]),
+      getPluginRecommendations: vi.fn().mockReturnValue([]),
+      parsePluginfile: vi.fn().mockReturnValue([]),
+      filterInstalledPlugins: vi.fn().mockImplementation((recs) => recs),
+    }));
+
+    const { handleGetPluginInfo } = await import('../plugins.js');
+    const result = await handleGetPluginInfo({ pluginName: 'versioning' });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('## fastlane-plugin-versioning');
+    expect(result.content[0].text).toContain('Manage version numbers');
+  });
+
+  it('should return error for unknown plugin', async () => {
+    vi.doMock('../../plugins/registry.js', () => ({
+      getPluginInfo: vi.fn().mockReturnValue(null),
+      searchPlugins: vi.fn().mockReturnValue([]),
+      getPluginRecommendations: vi.fn().mockReturnValue([]),
+      parsePluginfile: vi.fn().mockReturnValue([]),
+      filterInstalledPlugins: vi.fn().mockImplementation((recs) => recs),
+    }));
+
+    const { handleGetPluginInfo } = await import('../plugins.js');
+    const result = await handleGetPluginInfo({ pluginName: 'unknown-plugin' });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Error: Plugin "unknown-plugin" not found');
+    expect(result.content[0].text).toContain('Try:');
+    expect(result.content[0].text).toContain('search_plugins');
+  });
+
+  it('should handle plugin without homepage', async () => {
+    const mockPlugin: PluginInfo = {
+      name: 'fastlane-plugin-test',
+      description: 'Test plugin',
+      source: 'rubygems',
+      // no homepage
+    };
+
+    vi.doMock('../../plugins/registry.js', () => ({
+      getPluginInfo: vi.fn().mockReturnValue(mockPlugin),
+      searchPlugins: vi.fn().mockReturnValue([]),
+      getPluginRecommendations: vi.fn().mockReturnValue([]),
+      parsePluginfile: vi.fn().mockReturnValue([]),
+      filterInstalledPlugins: vi.fn().mockImplementation((recs) => recs),
+    }));
+
+    const { handleGetPluginInfo } = await import('../plugins.js');
+    const result = await handleGetPluginInfo({ pluginName: 'fastlane-plugin-test' });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).not.toContain('**Homepage:**');
+  });
+});
+
+// =============================================================================
+// handleInstallPlugins Tests
+// =============================================================================
+
+describe('handleInstallPlugins', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should return error for invalid project path', async () => {
+    vi.doMock('../../utils/sanitize.js', () => ({
+      validateProjectPath: vi.fn().mockRejectedValue(
+        Object.assign(new Error('Path does not exist'), { name: 'ValidationError' })
+      ),
+    }));
+
+    const { handleInstallPlugins } = await import('../plugins.js');
+    const result = await handleInstallPlugins({
+      plugins: ['firebase_app_distribution'],
+      projectPath: '/nonexistent',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Error');
+    expect(result.content[0].text).toContain('Path does not exist');
+  });
+
+  it('should return error for empty plugins array', async () => {
+    vi.doMock('../../utils/sanitize.js', () => ({
+      validateProjectPath: vi.fn().mockResolvedValue('/test/project'),
+    }));
+
+    const { handleInstallPlugins } = await import('../plugins.js');
+    const result = await handleInstallPlugins({
+      plugins: [],
+      projectPath: '/test/project',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Error');
+    expect(result.content[0].text).toContain('plugins must be a non-empty array');
+  });
+
+  it('should return error when no plugins are found in catalog', async () => {
+    vi.doMock('../../utils/sanitize.js', () => ({
+      validateProjectPath: vi.fn().mockResolvedValue('/test/project'),
+    }));
+
+    vi.doMock('../../plugins/registry.js', () => ({
+      getPluginInfo: vi.fn().mockReturnValue(null),
+      searchPlugins: vi.fn().mockReturnValue([]),
+      getPluginRecommendations: vi.fn().mockReturnValue([]),
+      parsePluginfile: vi.fn().mockReturnValue([]),
+      filterInstalledPlugins: vi.fn().mockImplementation((recs) => recs),
+    }));
+
+    const { handleInstallPlugins } = await import('../plugins.js');
+    const result = await handleInstallPlugins({
+      plugins: ['unknown-plugin-1', 'unknown-plugin-2'],
+      projectPath: '/test/project',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('None of the specified plugins were found');
+    expect(result.content[0].text).toContain('unknown-plugin-1');
+    expect(result.content[0].text).toContain('unknown-plugin-2');
+  });
+
+  it('should generate install commands for valid plugins', async () => {
+    vi.doMock('../../utils/sanitize.js', () => ({
+      validateProjectPath: vi.fn().mockResolvedValue('/test/project'),
+    }));
+
+    vi.doMock('../../plugins/registry.js', () => ({
+      getPluginInfo: vi.fn().mockImplementation((name: string) => {
+        if (name === 'fastlane-plugin-firebase_app_distribution') {
+          return {
+            name: 'fastlane-plugin-firebase_app_distribution',
+            description: 'Firebase distribution',
+            source: 'rubygems',
+          };
+        }
+        if (name === 'fastlane-plugin-versioning') {
+          return {
+            name: 'fastlane-plugin-versioning',
+            description: 'Versioning',
+            source: 'rubygems',
+          };
+        }
+        return null;
+      }),
+      searchPlugins: vi.fn().mockReturnValue([]),
+      getPluginRecommendations: vi.fn().mockReturnValue([]),
+      parsePluginfile: vi.fn().mockReturnValue([]),
+      filterInstalledPlugins: vi.fn().mockImplementation((recs) => recs),
+    }));
+
+    const { handleInstallPlugins } = await import('../plugins.js');
+    const result = await handleInstallPlugins({
+      plugins: ['firebase_app_distribution', 'versioning'],
+      projectPath: '/test/project',
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('## Install Plugins');
+    expect(result.content[0].text).toContain('cd /test/project');
+    expect(result.content[0].text).toContain('fastlane add_plugin firebase_app_distribution');
+    expect(result.content[0].text).toContain('fastlane add_plugin versioning');
+    expect(result.content[0].text).toContain("gem 'fastlane-plugin-firebase_app_distribution'");
+    expect(result.content[0].text).toContain("gem 'fastlane-plugin-versioning'");
+    expect(result.content[0].text).toContain('fastlane install_plugins');
+  });
+
+  it('should accept full plugin names', async () => {
+    vi.doMock('../../utils/sanitize.js', () => ({
+      validateProjectPath: vi.fn().mockResolvedValue('/test/project'),
+    }));
+
+    vi.doMock('../../plugins/registry.js', () => ({
+      getPluginInfo: vi.fn().mockImplementation((name: string) => {
+        if (name === 'fastlane-plugin-badge') {
+          return {
+            name: 'fastlane-plugin-badge',
+            description: 'Add badges',
+            source: 'rubygems',
+          };
+        }
+        return null;
+      }),
+      searchPlugins: vi.fn().mockReturnValue([]),
+      getPluginRecommendations: vi.fn().mockReturnValue([]),
+      parsePluginfile: vi.fn().mockReturnValue([]),
+      filterInstalledPlugins: vi.fn().mockImplementation((recs) => recs),
+    }));
+
+    const { handleInstallPlugins } = await import('../plugins.js');
+    const result = await handleInstallPlugins({
+      plugins: ['fastlane-plugin-badge'],
+      projectPath: '/test/project',
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('fastlane add_plugin badge');
+    expect(result.content[0].text).toContain("gem 'fastlane-plugin-badge'");
+  });
+
+  it('should warn about invalid plugins but still process valid ones', async () => {
+    vi.doMock('../../utils/sanitize.js', () => ({
+      validateProjectPath: vi.fn().mockResolvedValue('/test/project'),
+    }));
+
+    vi.doMock('../../plugins/registry.js', () => ({
+      getPluginInfo: vi.fn().mockImplementation((name: string) => {
+        if (name === 'fastlane-plugin-badge') {
+          return {
+            name: 'fastlane-plugin-badge',
+            description: 'Add badges',
+            source: 'rubygems',
+          };
+        }
+        return null;
+      }),
+      searchPlugins: vi.fn().mockReturnValue([]),
+      getPluginRecommendations: vi.fn().mockReturnValue([]),
+      parsePluginfile: vi.fn().mockReturnValue([]),
+      filterInstalledPlugins: vi.fn().mockImplementation((recs) => recs),
+    }));
+
+    const { handleInstallPlugins } = await import('../plugins.js');
+    const result = await handleInstallPlugins({
+      plugins: ['badge', 'unknown-plugin'],
+      projectPath: '/test/project',
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('**Warning:**');
+    expect(result.content[0].text).toContain('unknown-plugin');
+    expect(result.content[0].text).toContain('will be skipped');
+    expect(result.content[0].text).toContain('fastlane add_plugin badge');
+    expect(result.content[0].text).toContain("gem 'fastlane-plugin-badge'");
+  });
+
+  it('should handle mixed valid and invalid plugin entries in array', async () => {
+    vi.doMock('../../utils/sanitize.js', () => ({
+      validateProjectPath: vi.fn().mockResolvedValue('/test/project'),
+    }));
+
+    vi.doMock('../../plugins/registry.js', () => ({
+      getPluginInfo: vi.fn().mockImplementation((name: string) => {
+        if (name === 'fastlane-plugin-sentry') {
+          return {
+            name: 'fastlane-plugin-sentry',
+            description: 'Sentry integration',
+            source: 'rubygems',
+          };
+        }
+        return null;
+      }),
+      searchPlugins: vi.fn().mockReturnValue([]),
+      getPluginRecommendations: vi.fn().mockReturnValue([]),
+      parsePluginfile: vi.fn().mockReturnValue([]),
+      filterInstalledPlugins: vi.fn().mockImplementation((recs) => recs),
+    }));
+
+    const { handleInstallPlugins } = await import('../plugins.js');
+    const result = await handleInstallPlugins({
+      plugins: ['sentry', ''],
+      projectPath: '/test/project',
+    });
+
+    // Empty string should be treated as invalid
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain('fastlane add_plugin sentry');
   });
 });
