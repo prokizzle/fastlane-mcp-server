@@ -4,9 +4,24 @@ version = "0.1.0"
 description = "Intelligent MCP server for iOS/Android builds with fastlane"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    { name = "Nicholas Prokesch" }
+]
+keywords = ["mcp", "fastlane", "ios", "android", "mobile", "automation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
 dependencies = [
     "fastmcp>=2.0.0",
 ]
+
+[project.scripts]
+fastlane-mcp = "fastlane_mcp.server:mcp.run"
 
 [project.optional-dependencies]
 dev = [
