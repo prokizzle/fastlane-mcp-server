@@ -6,10 +6,12 @@ from fastlane_mcp.validators.types import (
     ValidationResult,
     PreflightContext,
 )
+from fastlane_mcp.validators.environment import validate_environment
 
 __all__ = [
     "IssueLevel",
     "ValidationIssue",
     "ValidationResult",
     "PreflightContext",
+    "validate_environment",
 ]
