@@ -8,6 +8,7 @@ from fastlane_mcp.validators.types import (
 )
 from fastlane_mcp.validators.environment import validate_environment
 from fastlane_mcp.validators.tools import validate_tools
+from fastlane_mcp.validators.project import validate_project
 
 __all__ = [
     "IssueLevel",
@@ -16,4 +17,5 @@ __all__ = [
     "PreflightContext",
     "validate_environment",
     "validate_tools",
+    "validate_project",
 ]
