@@ -1,6 +1,6 @@
 """Fastlane MCP Server - Intelligent assistant for iOS/Android builds."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from fastlane_mcp.utils import (
     execute_command,

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from fastlane_mcp.utils.sanitize import sanitize_lane_name
+from fastlane_mcp.utils.paths import find_execution_dir
 
 VALID_PLATFORMS = ("ios", "android")
 
@@ -94,11 +95,13 @@ async def execute_fastlane(
         raise ValueError(f"Invalid platform: {platform}. Must be one of: {', '.join(VALID_PLATFORMS)}")
 
     safe_lane = sanitize_lane_name(lane)
-    platform_dir = project_path / platform
+
+    # Find correct working directory (handles both RN and native projects)
+    execution_dir = find_execution_dir(project_path, platform)
 
     return await execute_command(
         "fastlane",
         [safe_lane],
-        cwd=platform_dir,
+        cwd=execution_dir,
         env=env_vars
     )

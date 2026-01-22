@@ -4,6 +4,7 @@ from fastmcp.exceptions import ToolError
 
 from fastlane_mcp.server import mcp
 from fastlane_mcp.utils.sanitize import validate_project_path, ValidationError
+from fastlane_mcp.utils.paths import find_fastlane_dir
 from fastlane_mcp.discovery.lanes import parse_lanes_from_fastfile
 
 
@@ -30,37 +31,55 @@ async def list_lanes(
 
     lanes_found: list[dict] = []
 
-    # Determine which directories to check
     if platform:
-        dirs_to_check = [(platform, validated_path / platform / "fastlane")]
+        # When platform is specified, check both platform-specific and root
+        fastlane_dir = find_fastlane_dir(validated_path, platform)
+        if fastlane_dir is None:
+            # Neither platform-specific nor root fastlane found
+            raise ToolError(
+                f"Fastfile not found. Checked:\n"
+                f"  - {validated_path / platform / 'fastlane' / 'Fastfile'}\n"
+                f"  - {validated_path / 'fastlane' / 'Fastfile'}"
+            )
+
+        fastfile = fastlane_dir / "Fastfile"
+        content = fastfile.read_text()
+        lanes = parse_lanes_from_fastfile(content)
+
+        for lane in lanes:
+            if lane.is_private and not include_private:
+                continue
+            lanes_found.append({
+                "name": lane.name,
+                "platform": lane.platform or platform,
+                "description": lane.description,
+                "is_private": lane.is_private,
+            })
     else:
+        # No platform specified - check all locations
         dirs_to_check = [
             ("ios", validated_path / "ios" / "fastlane"),
             ("android", validated_path / "android" / "fastlane"),
             (None, validated_path / "fastlane"),
         ]
 
-    for plat, fastlane_dir in dirs_to_check:
-        fastfile = fastlane_dir / "Fastfile"
-        if not fastfile.exists():
-            if platform:  # Only error if a specific platform was requested
-                raise ToolError(f"Fastfile not found at {fastfile}")
-            continue
-
-        content = fastfile.read_text()
-        lanes = parse_lanes_from_fastfile(content)
-
-        for lane in lanes:
-            # Skip private lanes unless requested
-            if lane.is_private and not include_private:
+        for plat, fastlane_dir in dirs_to_check:
+            fastfile = fastlane_dir / "Fastfile"
+            if not fastfile.exists():
                 continue
 
-            lanes_found.append({
-                "name": lane.name,
-                "platform": lane.platform or plat,
-                "description": lane.description,
-                "is_private": lane.is_private,
-            })
+            content = fastfile.read_text()
+            lanes = parse_lanes_from_fastfile(content)
+
+            for lane in lanes:
+                if lane.is_private and not include_private:
+                    continue
+                lanes_found.append({
+                    "name": lane.name,
+                    "platform": lane.platform or plat,
+                    "description": lane.description,
+                    "is_private": lane.is_private,
+                })
 
     return {
         "project_path": str(validated_path),

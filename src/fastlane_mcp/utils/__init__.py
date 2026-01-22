@@ -11,6 +11,10 @@ from fastlane_mcp.utils.sanitize import (
     validate_project_path,
     ValidationError,
 )
+from fastlane_mcp.utils.paths import (
+    find_fastlane_dir,
+    find_execution_dir,
+)
 
 __all__ = [
     "execute_command",
@@ -20,4 +24,6 @@ __all__ = [
     "sanitize_lane_name",
     "validate_project_path",
     "ValidationError",
+    "find_fastlane_dir",
+    "find_execution_dir",
 ]

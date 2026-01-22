@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from fastlane_mcp.validators.types import IssueLevel, ValidationIssue
+from fastlane_mcp.utils.paths import find_fastlane_dir
 
 
 async def validate_project(
@@ -22,23 +23,31 @@ async def validate_project(
     issues: list[ValidationIssue] = []
     project = Path(project_path)
 
-    # Determine fastlane directory
-    if platform:
-        fastlane_dir = project / platform / "fastlane"
-    else:
-        fastlane_dir = project / "fastlane"
+    # Find fastlane directory (checks both platform-specific and root)
+    fastlane_dir = find_fastlane_dir(project, platform)
+
+    if fastlane_dir is None:
+        # Build helpful error message showing what was checked
+        if platform:
+            issues.append(ValidationIssue(
+                level=IssueLevel.ERROR,
+                code="NO_FASTFILE",
+                message=(
+                    f"Fastfile not found at {project / platform / 'fastlane' / 'Fastfile'} "
+                    f"or {project / 'fastlane' / 'Fastfile'}"
+                ),
+                suggestion="Run 'fastlane init' to create a Fastfile"
+            ))
+        else:
+            issues.append(ValidationIssue(
+                level=IssueLevel.ERROR,
+                code="NO_FASTFILE",
+                message=f"Fastfile not found at {project / 'fastlane' / 'Fastfile'}",
+                suggestion="Run 'fastlane init' to create a Fastfile"
+            ))
+        return issues  # Can't validate lane without Fastfile
 
     fastfile = fastlane_dir / "Fastfile"
-
-    # Check Fastfile exists
-    if not fastfile.exists():
-        issues.append(ValidationIssue(
-            level=IssueLevel.ERROR,
-            code="NO_FASTFILE",
-            message=f"Fastfile not found at {fastfile}",
-            suggestion="Run 'fastlane init' to create a Fastfile"
-        ))
-        return issues  # Can't validate lane without Fastfile
 
     # Validate lane exists if specified
     if lane:

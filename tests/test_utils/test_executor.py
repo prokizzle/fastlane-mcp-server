@@ -46,10 +46,11 @@ class TestExecuteCommand:
 
 class TestExecuteFastlane:
     @pytest.mark.asyncio
-    async def test_executes_in_platform_directory(self, tmp_path):
-        # Create platform directory structure
-        ios_dir = tmp_path / "ios"
-        ios_dir.mkdir()
+    async def test_executes_in_platform_directory_react_native(self, tmp_path):
+        """React Native style: fastlane in ios/ subdirectory."""
+        ios_fastlane = tmp_path / "ios" / "fastlane"
+        ios_fastlane.mkdir(parents=True)
+        (ios_fastlane / "Fastfile").write_text("lane :build do\nend")
 
         with patch("fastlane_mcp.utils.executor.execute_command") as mock_exec:
             mock_exec.return_value = ExecutionResult("output", "", 0)
@@ -60,12 +61,32 @@ class TestExecuteFastlane:
             call_args = mock_exec.call_args
             assert call_args[0][0] == "fastlane"
             assert call_args[0][1] == ["build"]
-            assert call_args[1]["cwd"] == ios_dir
+            assert call_args[1]["cwd"] == tmp_path / "ios"
+
+    @pytest.mark.asyncio
+    async def test_executes_in_root_directory_native(self, tmp_path):
+        """Native iOS style: fastlane in project root."""
+        fastlane_dir = tmp_path / "fastlane"
+        fastlane_dir.mkdir()
+        (fastlane_dir / "Fastfile").write_text("lane :build do\nend")
+
+        with patch("fastlane_mcp.utils.executor.execute_command") as mock_exec:
+            mock_exec.return_value = ExecutionResult("output", "", 0)
+
+            result = await execute_fastlane("build", "ios", tmp_path)
+
+            mock_exec.assert_called_once()
+            call_args = mock_exec.call_args
+            assert call_args[0][0] == "fastlane"
+            assert call_args[0][1] == ["build"]
+            # Should run from project root for native iOS projects
+            assert call_args[1]["cwd"] == tmp_path
 
     @pytest.mark.asyncio
     async def test_sanitizes_lane_name(self, tmp_path):
-        ios_dir = tmp_path / "ios"
-        ios_dir.mkdir()
+        fastlane_dir = tmp_path / "fastlane"
+        fastlane_dir.mkdir()
+        (fastlane_dir / "Fastfile").write_text("lane :build do\nend")
 
         with patch("fastlane_mcp.utils.executor.execute_command") as mock_exec:
             mock_exec.return_value = ExecutionResult("output", "", 0)
@@ -78,8 +99,9 @@ class TestExecuteFastlane:
 
     @pytest.mark.asyncio
     async def test_passes_env_vars(self, tmp_path):
-        ios_dir = tmp_path / "ios"
-        ios_dir.mkdir()
+        fastlane_dir = tmp_path / "fastlane"
+        fastlane_dir.mkdir()
+        (fastlane_dir / "Fastfile").write_text("lane :build do\nend")
 
         with patch("fastlane_mcp.utils.executor.execute_command") as mock_exec:
             mock_exec.return_value = ExecutionResult("output", "", 0)
