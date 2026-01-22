@@ -8,7 +8,7 @@ mcp = FastMCP(
 )
 
 # Import tools to register them
-from fastlane_mcp.tools import build  # noqa: F401, E402
+from fastlane_mcp.tools import build, analyze  # noqa: F401, E402
 
 if __name__ == "__main__":
     mcp.run()
