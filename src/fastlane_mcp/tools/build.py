@@ -9,6 +9,26 @@ from fastlane_mcp.utils.sanitize import validate_project_path, ValidationError
 from fastlane_mcp.errors.diagnosis import diagnose_error
 
 
+def _format_build_error(diagnosis: dict, stdout: str, stderr: str) -> str:
+    """Format build error with diagnosis and raw output."""
+    parts = [
+        diagnosis['message'],
+        "",
+        f"Diagnosis: {diagnosis['diagnosis']}",
+        "",
+        "Suggestions:",
+    ]
+    parts.extend(f"  - {s}" for s in diagnosis['suggestions'])
+
+    # Always include raw output for debugging
+    if stderr:
+        parts.extend(["", "--- stderr ---", stderr[-2000:]])  # Last 2000 chars
+    if stdout:
+        parts.extend(["", "--- stdout ---", stdout[-2000:]])  # Last 2000 chars
+
+    return "\n".join(parts)
+
+
 @mcp.tool
 async def build_ios(
     project_path: str,
@@ -54,11 +74,7 @@ async def build_ios(
 
     if result.exit_code != 0:
         diagnosis = diagnose_error(result.stderr or result.stdout)
-        raise ToolError(
-            f"{diagnosis['message']}\n\n"
-            f"Diagnosis: {diagnosis['diagnosis']}\n\n"
-            f"Suggestions:\n" + "\n".join(f"  - {s}" for s in diagnosis['suggestions'])
-        )
+        raise ToolError(_format_build_error(diagnosis, result.stdout, result.stderr))
 
     return {"success": True, "output": result.stdout}
 
@@ -108,10 +124,6 @@ async def build_android(
 
     if result.exit_code != 0:
         diagnosis = diagnose_error(result.stderr or result.stdout)
-        raise ToolError(
-            f"{diagnosis['message']}\n\n"
-            f"Diagnosis: {diagnosis['diagnosis']}\n\n"
-            f"Suggestions:\n" + "\n".join(f"  - {s}" for s in diagnosis['suggestions'])
-        )
+        raise ToolError(_format_build_error(diagnosis, result.stdout, result.stderr))
 
     return {"success": True, "output": result.stdout}
