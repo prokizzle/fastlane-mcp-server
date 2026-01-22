@@ -7,5 +7,8 @@ mcp = FastMCP(
     instructions="Intelligent assistant for iOS/Android builds with fastlane"
 )
 
+# Import tools to register them
+from fastlane_mcp.tools import build  # noqa: F401, E402
+
 if __name__ == "__main__":
     mcp.run()
