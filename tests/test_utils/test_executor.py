@@ -1,7 +1,8 @@
 """Tests for command execution."""
 
 import pytest
-from fastlane_mcp.utils.executor import execute_command, ExecutionResult
+from unittest.mock import patch, AsyncMock
+from fastlane_mcp.utils.executor import execute_command, ExecutionResult, execute_fastlane
 
 
 class TestExecuteCommand:
@@ -41,3 +42,54 @@ class TestExecuteCommand:
     async def test_captures_stderr(self):
         result = await execute_command("sh", ["-c", "echo error >&2"])
         assert "error" in result.stderr
+
+
+class TestExecuteFastlane:
+    @pytest.mark.asyncio
+    async def test_executes_in_platform_directory(self, tmp_path):
+        # Create platform directory structure
+        ios_dir = tmp_path / "ios"
+        ios_dir.mkdir()
+
+        with patch("fastlane_mcp.utils.executor.execute_command") as mock_exec:
+            mock_exec.return_value = ExecutionResult("output", "", 0)
+
+            result = await execute_fastlane("build", "ios", tmp_path)
+
+            mock_exec.assert_called_once()
+            call_args = mock_exec.call_args
+            assert call_args[0][0] == "fastlane"
+            assert call_args[0][1] == ["build"]
+            assert call_args[1]["cwd"] == ios_dir
+
+    @pytest.mark.asyncio
+    async def test_sanitizes_lane_name(self, tmp_path):
+        ios_dir = tmp_path / "ios"
+        ios_dir.mkdir()
+
+        with patch("fastlane_mcp.utils.executor.execute_command") as mock_exec:
+            mock_exec.return_value = ExecutionResult("output", "", 0)
+
+            # Should sanitize whitespace
+            await execute_fastlane("  build  ", "ios", tmp_path)
+
+            call_args = mock_exec.call_args
+            assert call_args[0][1] == ["build"]
+
+    @pytest.mark.asyncio
+    async def test_passes_env_vars(self, tmp_path):
+        ios_dir = tmp_path / "ios"
+        ios_dir.mkdir()
+
+        with patch("fastlane_mcp.utils.executor.execute_command") as mock_exec:
+            mock_exec.return_value = ExecutionResult("output", "", 0)
+
+            await execute_fastlane("build", "ios", tmp_path, env_vars={"KEY": "value"})
+
+            call_args = mock_exec.call_args
+            assert call_args[1]["env"] == {"KEY": "value"}
+
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_platform(self, tmp_path):
+        with pytest.raises(ValueError, match="Invalid platform"):
+            await execute_fastlane("build", "windows", tmp_path)

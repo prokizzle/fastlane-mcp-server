@@ -5,6 +5,10 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from fastlane_mcp.utils.sanitize import sanitize_lane_name
+
+VALID_PLATFORMS = ("ios", "android")
+
 
 @dataclass
 class ExecutionResult:
@@ -64,3 +68,37 @@ async def execute_command(
             stderr=f"Command timed out after {timeout}s",
             exit_code=124
         )
+
+
+async def execute_fastlane(
+    lane: str,
+    platform: str,
+    project_path: Path,
+    env_vars: dict[str, str] | None = None
+) -> ExecutionResult:
+    """Execute a fastlane lane.
+
+    Args:
+        lane: The lane name to execute
+        platform: Platform (ios or android)
+        project_path: Path to the project root
+        env_vars: Additional environment variables
+
+    Returns:
+        ExecutionResult with stdout, stderr, and exit code
+
+    Raises:
+        ValueError: If platform is invalid
+    """
+    if platform not in VALID_PLATFORMS:
+        raise ValueError(f"Invalid platform: {platform}. Must be one of: {', '.join(VALID_PLATFORMS)}")
+
+    safe_lane = sanitize_lane_name(lane)
+    platform_dir = project_path / platform
+
+    return await execute_command(
+        "fastlane",
+        [safe_lane],
+        cwd=platform_dir,
+        env=env_vars
+    )
