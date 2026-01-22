@@ -4,6 +4,7 @@ from fastlane_mcp.utils.executor import (
     execute_command,
     execute_fastlane,
     ExecutionResult,
+    VALID_PLATFORMS,
 )
 from fastlane_mcp.utils.sanitize import (
     sanitize_lane_name,
@@ -15,6 +16,7 @@ __all__ = [
     "execute_command",
     "execute_fastlane",
     "ExecutionResult",
+    "VALID_PLATFORMS",
     "sanitize_lane_name",
     "validate_project_path",
     "ValidationError",
