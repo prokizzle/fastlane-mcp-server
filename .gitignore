@@ -60,3 +60,15 @@ fastlane/test_output
 *.cer
 *.certSigningRequest
 *.mobileprovision
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+.eggs/
+*.egg-info/
+.pytest_cache/
